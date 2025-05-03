@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta
 
 # Admin and permission system
-ADMIN_IDS = [6165060012]  # Admin ID
+ADMIN_IDS = [ 6165060012 ]  # Admin ID
 user_permissions = {6165060012: float("inf")}  # Admin always has permission
 
 # Twilio session data
