@@ -36,7 +36,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/show_messages\n"
         "/delete_number\n"
         "/my_numbers\n"
-        "/grant <user_id> <time>  (Admin only)"
+        " SUPPORT : @EVANHELPING_BOT"
     )
 
 # Admin-only command
