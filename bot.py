@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta
 
 # Admin and permission system
-ADMIN_IDS = [123456789]  # এখানে তোমার Telegram User ID বসাও
+ADMIN_IDS = [6165060012]  # এখানে তোমার Telegram User ID বসাও
 user_permissions = {}  # user_id: expire_timestamp
 
 # Twilio session data
@@ -196,7 +196,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     from telegram.ext import Application
     keep_alive()  # keep server running
-    TOKEN = "YOUR_BOT_TOKEN"
+    TOKEN = "8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
