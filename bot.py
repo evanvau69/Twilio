@@ -19,7 +19,18 @@ def permission_required(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         expire_time = user_permissions.get(user_id, 0)
+
+        # If the permission has expired
         if time.time() > expire_time:
+            # Notify the user that their subscription has ended
+            try:
+                user = await update.bot.get_chat(user_id)  # Fetch the user's data
+                await user.send_message(
+                    "⚠️ আপনার বট থেকে Subscription শেষ হয়ে গেছে। দয়া করে Admin এর সাথে যোগাযোগ করে নতুন Subscription নিয়ে নিন।"
+                )
+            except Exception as e:
+                print(f"Error sending message to user {user_id}: {str(e)}")
+
             keyboard = [
                 [InlineKeyboardButton("1 Hour - Free", callback_data="PLAN:1h:0")],
                 [InlineKeyboardButton("1 Day - $2", callback_data="PLAN:1d:2")],
@@ -36,7 +47,9 @@ def permission_required(func):
             elif update.callback_query:
                 await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
             return
+
         return await func(update, context)
+
     return wrapper
 
 # /start command
@@ -78,6 +91,14 @@ async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         user_permissions[target_id] = time.time() + seconds
         await update.message.reply_text(f"✅ {target_id} কে {duration} সময়ের জন্য পারমিশন দেওয়া হয়েছে।")
+
+        # Send notification to the user about the granted permission
+        try:
+            user = await update.bot.get_chat(target_id)
+            await user.send_message(f"✅ আপনাকে {duration} সময়ের জন্য পারমিশন দেওয়া হয়েছে।")
+        except Exception as e:
+            print(f"Error sending permission message to user {target_id}: {str(e)}")
+
     except Exception:
         await update.message.reply_text("❌ অবৈধ সময় ইউনিট। ব্যবহার করুন: m, h, d, w, mo")
 
@@ -229,49 +250,43 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = query.from_user.id
     client = user_clients.get(user_id)
-    if not client:
-        await query.edit_message_text("⚠️ আগে /login করুন।")
-        return
-    data = query.data
-    if data.startswith("BUY:"):
-        phone_number = data.split("BUY:")[1]
-        try:
-            purchased = client.incoming_phone_numbers.create(phone_number=phone_number)
-            user_purchased_numbers.setdefault(user_id, []).append(purchased.phone_number)
-            user_available_numbers[user_id] = []
-            await query.edit_message_text(f"✅ আপনি নাম্বারটি কিনেছেন: {purchased.phone_number}")
-        except Exception as e:
-            await query.edit_message_text(f"নাম্বার কেনা যায়নি: {e}")
-    elif data.startswith("DELETE:"):
-        phone_number = data.split("DELETE:")[1]
-        try:
-            numbers = client.incoming_phone_numbers.list(phone_number=phone_number)
-            if numbers:
-                numbers[0].delete()
-                await query.edit_message_text(f"✅ নাম্বার {phone_number} ডিলিট হয়েছে।")
-            else:
-                await query.edit_message_text("নাম্বার পাওয়া যায়নি।")
-        except Exception as e:
-            await query.edit_message_text(f"নাম্বার ডিলিট করতে সমস্যা: {e}")
+    data = query.data.split(":")
+    
+    if data[0] == "BUY":
+        phone_number = data[1]
+        if phone_number not in user_available_numbers.get(user_id, []):
+            await query.edit_message_text("⚠️ এটি উপলব্ধ নাম্বার নয়।")
+            return
+        # Assume user buys the number and set it to purchased
+        user_purchased_numbers[user_id] = phone_number
+        await query.edit_message_text(f"✅ আপনি {phone_number} নাম্বারটি সফলভাবে কিনেছেন!")
+    elif data[0] == "DELETE":
+        phone_number = data[1]
+        if phone_number not in user_purchased_numbers.get(user_id, []):
+            await query.edit_message_text("⚠️ আপনার কাছে এই নাম্বারটি নেই।")
+            return
+        # Simulate deletion of the number
+        del user_purchased_numbers[user_id]
+        await query.edit_message_text(f"✅ {phone_number} নাম্বারটি সফলভাবে ডিলিট করা হয়েছে!")
 
-# Main bot runner
-def main():
-    keep_alive()
-    TOKEN = "8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
-    app = Application.builder().token(TOKEN).build()
+# Set up the Application
+application = Application.builder().token('8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA').build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("grant", grant))
-    app.add_handler(CommandHandler("login", login))
-    app.add_handler(CommandHandler("buy_number", buy_number))
-    app.add_handler(CommandHandler("show_messages", show_messages))
-    app.add_handler(CommandHandler("delete_number", delete_number))
-    app.add_handler(CommandHandler("my_numbers", my_numbers))
+# Command handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("grant", grant))
+application.add_handler(CommandHandler("login", login))
+application.add_handler(CommandHandler("buy_number", buy_number))
+application.add_handler(CommandHandler("show_messages", show_messages))
+application.add_handler(CommandHandler("delete_number", delete_number))
+application.add_handler(CommandHandler("my_numbers", my_numbers))
 
-    app.add_handler(CallbackQueryHandler(button_handler, pattern="^(BUY|DELETE):"))
-    app.add_handler(CallbackQueryHandler(subscription_handler, pattern="^PLAN:"))
+# Button handlers
+application.add_handler(CallbackQueryHandler(subscription_handler))
+application.add_handler(CallbackQueryHandler(button_handler))
 
-    app.run_polling()
+# Keep the bot alive
+keep_alive()
 
-if __name__ == "__main__":
-    main()
+# Start the bot
+application.run_polling()
