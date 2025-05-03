@@ -7,8 +7,8 @@ import time
 from datetime import datetime, timedelta
 
 # Admin and permission system
-ADMIN_IDS = [6165060012]  # এখানে তোমার Telegram User ID বসাও
-user_permissions = {6165060012}  # user_id: expire_timestamp
+ADMIN_IDS = [6165060012]  # Admin ID
+user_permissions = {6165060012: float("inf")}  # Admin always has permission
 
 # Twilio session data
 user_clients = {}
@@ -19,7 +19,8 @@ user_purchased_numbers = {}
 def permission_required(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
-        if user_id not in user_permissions or user_permissions[user_id] < time.time():
+        expire_time = user_permissions.get(user_id, 0)
+        if time.time() > expire_time:
             if update.message:
                 await update.message.reply_text("⚠️ আপনার পারমিশন নেই বা মেয়াদ শেষ হয়েছে।")
             elif update.callback_query:
@@ -30,13 +31,13 @@ def permission_required(func):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "স্বাগতম Evan Bot-এ! কাজ করার জন্য নিচে কমান্ড গুলান ব্যবহার করবেন অথবা Menu বাটন থেকে কাজ করবেন \n\n"
+        "স্বাগতম Evan Bot-এ!\n\n"
         "/login <SID> <TOKEN>\n"
         "/buy_number <Area Code>\n"
         "/show_messages\n"
         "/delete_number\n"
         "/my_numbers\n"
-        " SUPPORT : @EVANHELPING_BOT"
+        "SUPPORT : @EVANHELPING_BOT"
     )
 
 # Admin-only command
@@ -46,21 +47,26 @@ async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
         return
     if len(context.args) != 2:
-        await update.message.reply_text("ব্যবহার: /grant <user_id> <duration>\nউদাহরণ: /grant 123456789 3d")
+        await update.message.reply_text("ব্যবহার: /grant <user_id> <duration>\nযেমন: /grant 123456789 3d")
         return
 
-    target_id = int(context.args[0])
-    duration = context.args[1]
-
     try:
-        unit = duration[-1]
-        amount = int(duration[:-1])
-        unit_map = {'m': 60, 'h': 3600, 'd': 86400, 'w': 604800, 'mo': 2592000}
-        if unit not in ['m', 'h', 'd', 'w'] and duration[-2:] != 'mo':
-            raise ValueError
-        seconds = amount * unit_map['mo'] if duration[-2:] == 'mo' else amount * unit_map[unit]
+        target_id = int(context.args[0])
+        duration = context.args[1].lower()
+
+        if duration.endswith("mo"):
+            amount = int(duration[:-2])
+            seconds = amount * 2592000
+        elif duration[-1] in "mhdw":
+            unit = duration[-1]
+            amount = int(duration[:-1])
+            unit_map = {'m': 60, 'h': 3600, 'd': 86400, 'w': 604800}
+            seconds = amount * unit_map[unit]
+        else:
+            raise ValueError("invalid unit")
+
         user_permissions[target_id] = time.time() + seconds
-        await update.message.reply_text(f"✅ {target_id} এর জন্য পারমিশন দেওয়া হলো {duration} সময়ের জন্য।")
+        await update.message.reply_text(f"✅ {target_id} কে {duration} সময়ের জন্য পারমিশন দেওয়া হয়েছে।")
     except Exception:
         await update.message.reply_text("❌ অবৈধ সময় ইউনিট। ব্যবহার করুন: m, h, d, w, mo")
 
@@ -160,7 +166,6 @@ async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"সমস্যা: {e}")
 
-# Callback Handlers
 @permission_required
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -192,9 +197,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await query.edit_message_text(f"নাম্বার ডিলিট করতে সমস্যা: {e}")
 
-# Main Function
 def main():
-    from telegram.ext import Application
     keep_alive()  # keep server running
     TOKEN = "8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
     app = Application.builder().token(TOKEN).build()
