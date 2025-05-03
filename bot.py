@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 # Admin and permission system
 ADMIN_IDS = [6165060012]  # এখানে তোমার Telegram User ID বসাও
-user_permissions = {}  # user_id: expire_timestamp
+user_permissions = {6165060012}  # user_id: expire_timestamp
 
 # Twilio session data
 user_clients = {}
