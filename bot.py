@@ -222,54 +222,33 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("✅ আপনি ১ ঘন্টার জন্য ফ্রি প্লান একটিভ করেছেন।")
             return
 
-        seconds, label, cost = prices[plan]
-        msg = (
-            f"**Please send {cost} to Binance Pay ID: 469628989**\n\n"
-            f"পেমেন্ট করার পর প্রুভ (screenshot/transaction ID) পাঠান: @EVANHELPING_BOT\n\n"
-            f"Your payment details:\n"
-            f"🆔 User ID: {user_id}\n"
-            f"👤 Username: {username}\n"
-            f"📋 Plan: {label}\n"
-            f"💰 Amount: {cost}"
-        )
-        await query.edit_message_text(msg, parse_mode="Markdown")
-
-# Broadcast command
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
-        return
-    if not context.args:
-        await update.message.reply_text("ব্যবহার: /broadcast <message>")
-        return
-
-    message_text = " ".join(context.args)
-    success, fail = 0, 0
-    for uid in user_permissions.keys():
-        try:
-            await context.bot.send_message(chat_id=uid, text=message_text)
-            success += 1
-        except Exception:
-            fail += 1
-    await update.message.reply_text(f"✅ পাঠানো হয়েছে: {success} জনকে\n❌ ব্যর্থ হয়েছে: {fail} জনকে")
+        if plan in prices:
+            seconds, label, cost = prices[plan]
+            msg = (
+                f"**Please send {cost} to Binance Pay ID: 469628989**\n\n"
+                f"পেমেন্ট করার পর প্রুভ (screenshot/transaction ID) পাঠান: @EVANHELPING_BOT\n\n"
+                f"Your payment details:\n"
+                f"🆔 User ID: {user_id}\n"
+                f"👤 Username: {username}\n"
+                f"📋 Plan: {label}\n"
+                f"💰 Amount: {cost}"
+            )
+            await query.edit_message_text(msg, parse_mode="Markdown")
 
 def main():
+    application = Application.builder().token("8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA").build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("grant", grant))
+    application.add_handler(CommandHandler("login", login))
+    application.add_handler(CommandHandler("buy_number", buy_number))
+    application.add_handler(CommandHandler("show_messages", show_messages))
+    application.add_handler(CommandHandler("delete_number", delete_number))
+    application.add_handler(CommandHandler("my_numbers", my_numbers))
+    application.add_handler(CallbackQueryHandler(button_handler))
+
     keep_alive()
-    TOKEN = "8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
-    app = Application.builder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("grant", grant))
-    app.add_handler(CommandHandler("login", login))
-    app.add_handler(CommandHandler("buy_number", buy_number))
-    app.add_handler(CommandHandler("show_messages", show_messages))
-    app.add_handler(CommandHandler("delete_number", delete_number))
-    app.add_handler(CommandHandler("my_numbers", my_numbers))
-    app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CallbackQueryHandler(button_handler))
-
-    app.run_polling()
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
