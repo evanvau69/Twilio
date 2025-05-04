@@ -1,6 +1,5 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from twilio.rest import Client
 from keep_alive import keep_alive
 import time
 from datetime import datetime
@@ -220,16 +219,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await query.edit_message_text("❌ আপনি ফ্রি প্ল্যান ব্যবহার করেছেন।")
         else:
-            price_map = {
-                "1d": 86400,
-                "7d": 604800,
-                "15d": 1296000,
-                "30d": 2592000
+            plan_details = {
+                "1d": {"amount": 2, "time": 86400},
+                "7d": {"amount": 10, "time": 604800},
+                "15d": {"amount": 15, "time": 1296000},
+                "30d": {"amount": 20, "time": 2592000}
             }
-            seconds = price_map.get(plan)
-            if seconds:
-                user_permissions[user_id] = time.time() + seconds
-                await query.edit_message_text(f"✅ আপনি {plan} প্ল্যান সফলভাবে কিনেছেন।")
+            plan_info = plan_details.get(plan)
+            if plan_info:
+                user_permissions[user_id] = time.time() + plan_info["time"]
+                # Send payment instructions message
+                message = f"""
+                Please send ${plan_info['amount']} to Binance Pay ID: 469628989
+                পেমেন্ট করার পর প্রুভ হিসাবে (screenshot/transaction ID) Admin কে সেন্ড করো  @EVANHELPING_BOT
+
+                Your payment details:
+                🆔 User ID: {user_id}
+                👤 Username: @{update.effective_user.username}
+                📋 Plan: {plan}
+                💰 Amount: ${plan_info['amount']}
+                আপনার ভেরিফিকেশন ১০/১৫ মিনিটের মধ্যে কম্পিলিট হয়ে যাবে
+                """
+                payment_message = await query.edit_message_text(message)
+                await asyncio.sleep(600)  # Wait for 10 minutes before deletion
+                await payment_message.delete()
             else:
                 await query.edit_message_text("❌ অবৈধ প্ল্যান।")
     else:
