@@ -2,57 +2,97 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from twilio.rest import Client
 from keep_alive import keep_alive
+
 import time
+import json
+import os
 
 # Admin setup
 ADMIN_IDS = [6165060012]
-user_permissions = {6165060012: float("inf")}
-used_free_trial = set()
-
-# Twilio session
+user_permissions = {}
+used_free_plan_users = set()
 user_clients = {}
-user_available_numbers = {}
-user_purchased_numbers = {}
+raw_twilio_data = {}
 
-# Permission decorator
+# File paths
+PERMISSIONS_FILE = "user_permissions.json"
+FREE_PLAN_FILE = "used_free_plan_users.json"
+TWILIO_FILE = "user_twilio_logins.json"
+
+# Load/save functions
+def load_user_permissions():
+    if os.path.exists(PERMISSIONS_FILE):
+        with open(PERMISSIONS_FILE, "r") as f:
+            raw = json.load(f)
+            return {int(k): v for k, v in raw.items()}
+    return {6165060012: float("inf")}
+
+def save_user_permissions():
+    with open(PERMISSIONS_FILE, "w") as f:
+        json.dump(user_permissions, f)
+
+def load_used_free_users():
+    if os.path.exists(FREE_PLAN_FILE):
+        with open(FREE_PLAN_FILE, "r") as f:
+            return set(json.load(f))
+    return set()
+
+def save_used_free_users():
+    with open(FREE_PLAN_FILE, "w") as f:
+        json.dump(list(used_free_plan_users), f)
+
+def load_twilio_clients():
+    if os.path.exists(TWILIO_FILE):
+        with open(TWILIO_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_twilio_clients(data):
+    with open(TWILIO_FILE, "w") as f:
+        json.dump(data, f)
+
+# Load on start
+user_permissions = load_user_permissions()
+used_free_plan_users = load_used_free_users()
+raw_twilio_data = load_twilio_clients()
+for uid, creds in raw_twilio_data.items():
+    try:
+        client = Client(creds["sid"], creds["token"])
+        client.api.accounts(creds["sid"]).fetch()
+        user_clients[int(uid)] = client
+    except:
+        continue
+
+# Decorator
 def permission_required(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         expire_time = user_permissions.get(user_id, 0)
-
-        # If the permission has expired
         if time.time() > expire_time:
-            # Notify the user that their subscription has ended
-            try:
-                user = await update.bot.get_chat(user_id)  # Fetch the user's data
-                await user.send_message(
-                    "⚠️ আপনার বট থেকে Subscription শেষ হয়ে গেছে। দয়া করে Admin এর সাথে যোগাযোগ করে নতুন Subscription নিয়ে নিন।"
-                )
-            except Exception as e:
-                print(f"Error sending message to user {user_id}: {str(e)}")
-
-            keyboard = [
-                [InlineKeyboardButton("1 Hour - Free", callback_data="PLAN:1h:0")],
-                [InlineKeyboardButton("1 Day - $2", callback_data="PLAN:1d:2")],
-                [InlineKeyboardButton("7 Days - $10", callback_data="PLAN:7d:10")],
-                [InlineKeyboardButton("15 Days - $15", callback_data="PLAN:15d:15")],
-                [InlineKeyboardButton("30 Days - $20", callback_data="PLAN:30d:20")]
+            buttons = [
+                [InlineKeyboardButton("1 Hour - Free", callback_data="plan_1h_0")],
+                [InlineKeyboardButton("1 Day - $2", callback_data="plan_1d_2")],
+                [InlineKeyboardButton("7 Day - $10", callback_data="plan_7d_10")],
+                [InlineKeyboardButton("15 Day - $15", callback_data="plan_15d_15")],
+                [InlineKeyboardButton("30 Day - $20", callback_data="plan_30d_20")]
             ]
-            text = (
-                "Bot এর Subscription কিনার জন্য নিচের বাটনে ক্লিক করুন 👇👇\n\n"
-                "1 Hour - Free\n1 Day - 2$\n7 Day - 10$\n15 Day - 15$\n30 Day - 20$"
-            )
             if update.message:
-                await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+                await update.message.reply_text(
+                    "⚠️ আপনার পারমিশন নেই বা মেয়াদ শেষ হয়েছে।\n\n"
+                    "Bot এর Subscription কিনার জন্য নিচের বাটনে ক্লিক করুন:",
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
             elif update.callback_query:
-                await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+                await update.callback_query.edit_message_text(
+                    "⚠️ আপনার পারমিশন নেই বা মেয়াদ শেষ হয়েছে।\n\n"
+                    "Bot এর Subscription কিনার জন্য নিচের বাটনে ক্লিক করুন:",
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
             return
-
         return await func(update, context)
-
     return wrapper
 
-# /start command
+# Command Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "স্বাগতম Evan Bot-এ!\n\n"
@@ -64,10 +104,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "SUPPORT : @EVANHELPING_BOT"
     )
 
-# Admin grant command
 async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
+    if update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
         return
     if len(context.args) != 2:
@@ -77,7 +115,6 @@ async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         target_id = int(context.args[0])
         duration = context.args[1].lower()
-
         if duration.endswith("mo"):
             amount = int(duration[:-2])
             seconds = amount * 2592000
@@ -87,62 +124,14 @@ async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
             unit_map = {'m': 60, 'h': 3600, 'd': 86400, 'w': 604800}
             seconds = amount * unit_map[unit]
         else:
-            raise ValueError("invalid unit")
+            raise ValueError("Invalid unit")
 
         user_permissions[target_id] = time.time() + seconds
+        save_user_permissions()
         await update.message.reply_text(f"✅ {target_id} কে {duration} সময়ের জন্য পারমিশন দেওয়া হয়েছে।")
-
-        # Send notification to the user about the granted permission
-        try:
-            user = await update.bot.get_chat(target_id)
-            await user.send_message(f"✅ আপনাকে {duration} সময়ের জন্য পারমিশন দেওয়া হয়েছে।")
-        except Exception as e:
-            print(f"Error sending permission message to user {target_id}: {str(e)}")
-
-    except Exception:
+    except:
         await update.message.reply_text("❌ অবৈধ সময় ইউনিট। ব্যবহার করুন: m, h, d, w, mo")
 
-# Subscription button click
-async def subscription_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user = query.from_user
-    user_id = user.id
-    username = user.username or "N/A"
-
-    data = query.data
-    if data.startswith("PLAN:"):
-        duration_code, amount = data.split(":")[1:]
-        duration_text = {
-            "1h": "1 Hour",
-            "1d": "1 Day",
-            "7d": "7 Days",
-            "15d": "15 Days",
-            "30d": "30 Days"
-        }.get(duration_code, "Unknown")
-
-        if duration_code == "1h" and amount == "0":
-            if user_id in used_free_trial:
-                await query.edit_message_text("⚠️ আপনি আগেই ১ ঘণ্টার ফ্রি এক্সেস ব্যবহার করেছেন।\n\nদয়া করে অন্য একটি প্ল্যান চয়েস করুন।")
-                return
-            used_free_trial.add(user_id)
-            user_permissions[user_id] = time.time() + 3600
-            await query.edit_message_text("✅ আপনার 1 ঘণ্টার ফ্রি এক্সেস অ্যাক্টিভ হয়েছে!\n\nএখন আপনি Bot ব্যবহার করতে পারবেন।")
-            return
-
-        message = (
-            f"Please send ${amount} to Binance Pay ID: 469628989\n"
-            f"After payment, please send proof (screenshot/transaction ID) to the admin @EVANHELPING_BOT\n\n"
-            f"Your payment details:\n"
-            f"🆔 User ID: {user_id}\n"
-            f"👤 Username: {username}\n"
-            f"📋 Plan: {duration_text}\n"
-            f"💰 Amount: ${amount}\n\n"
-            f"Verification must be completed within 15 minutes, or the request will be cancelled."
-        )
-        await query.edit_message_text(message)
-
-# Login to Twilio
 @permission_required
 async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 2:
@@ -153,11 +142,12 @@ async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
         client = Client(sid, token)
         client.api.accounts(sid).fetch()
         user_clients[update.effective_user.id] = client
+        raw_twilio_data[str(update.effective_user.id)] = {"sid": sid, "token": token}
+        save_twilio_clients(raw_twilio_data)
         await update.message.reply_text("✅ লগইন সফল!")
     except Exception as e:
         await update.message.reply_text(f"লগইন ব্যর্থ: {e}")
 
-# Buy number
 @permission_required
 async def buy_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 1:
@@ -174,19 +164,17 @@ async def buy_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not numbers:
             await update.message.reply_text("নাম্বার পাওয়া যায়নি।")
             return
-        user_available_numbers[user_id] = [n.phone_number for n in numbers]
         keyboard = [
             [InlineKeyboardButton(text=n.phone_number, callback_data=f"BUY:{n.phone_number}")]
             for n in numbers
         ]
         await update.message.reply_text(
-            "নিচের নাম্বারগুলো পাওয়া গেছে:\n\n" + "\n".join(user_available_numbers[user_id]),
+            "নিচের নাম্বারগুলো পাওয়া গেছে:\n\n" + "\n".join([n.phone_number for n in numbers]),
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
         await update.message.reply_text(f"সমস্যা: {e}")
 
-# Show messages
 @permission_required
 async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client = user_clients.get(update.effective_user.id)
@@ -206,7 +194,6 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"সমস্যা: {e}")
 
-# Delete number
 @permission_required
 async def delete_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client = user_clients.get(update.effective_user.id)
@@ -223,7 +210,6 @@ async def delete_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"ডিলিট করতে সমস্যা: {e}")
 
-# My numbers
 @permission_required
 async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client = user_clients.get(update.effective_user.id)
@@ -243,50 +229,88 @@ async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"সমস্যা: {e}")
 
-# Buy/Delete button handler
-@permission_required
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    data = query.data
+    user = query.from_user
+    user_id = user.id
+
+    if data.startswith("plan_"):
+        _, duration, amount = data.split("_")
+        if duration == "1h" and amount == "0":
+            if user_id in used_free_plan_users:
+                await query.edit_message_text("❌ আপনি ইতিমধ্যেই ফ্রি প্লান ব্যবহার করেছেন, এটি এখন আপনার জন্য প্রযোজ্য নয়।")
+                return
+            user_permissions[user_id] = time.time() + 3600
+            used_free_plan_users.add(user_id)
+            save_used_free_users()
+            save_user_permissions()
+            await query.edit_message_text("✅ আপনি সফলভাবে ১ ঘন্টার জন্য ফ্রি প্লান পেয়েছেন!")
+            return
+
+        plan_text = {
+            "1d": "1 Day",
+            "7d": "7 Day",
+            "15d": "15 Day",
+            "30d": "30 Day"
+        }.get(duration, f"{duration}")
+
+        await query.edit_message_text(
+            f"**Please send ${amount} to Binance Pay ID: 469628989**\n\n"
+            f"পেমেন্ট করার পর প্রুভ (screenshot/txn ID) পাঠান: @EVANHELPING_BOT\n\n"
+            f"*Your payment details:*\n"
+            f"🆔 User ID: {user_id}\n"
+            f"👤 Username: @{user.username if user.username else 'N/A'}\n"
+            f"📋 Plan: {plan_text}\n"
+            f"💰 Amount: ${amount}",
+            parse_mode="Markdown"
+        )
+
+    elif data.startswith("BUY:") or data.startswith("DELETE:"):
+        await handle_twilio_buttons(update, context)
+
+async def handle_twilio_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
     user_id = query.from_user.id
     client = user_clients.get(user_id)
-    data = query.data.split(":")
-    
-    if data[0] == "BUY":
-        phone_number = data[1]
-        if phone_number not in user_available_numbers.get(user_id, []):
-            await query.edit_message_text("⚠️ এটি উপলব্ধ নাম্বার নয়।")
-            return
-        # Assume user buys the number and set it to purchased
-        user_purchased_numbers[user_id] = phone_number
-        await query.edit_message_text(f"✅ আপনি {phone_number} নাম্বারটি সফলভাবে কিনেছেন!")
-    elif data[0] == "DELETE":
-        phone_number = data[1]
-        if phone_number not in user_purchased_numbers.get(user_id, []):
-            await query.edit_message_text("⚠️ আপনার কাছে এই নাম্বারটি নেই।")
-            return
-        # Simulate deletion of the number
-        del user_purchased_numbers[user_id]
-        await query.edit_message_text(f"✅ {phone_number} নাম্বারটি সফলভাবে ডিলিট করা হয়েছে!")
+    if not client:
+        await query.edit_message_text("⚠️ আগে /login করুন।")
+        return
+    data = query.data
+    if data.startswith("BUY:"):
+        number = data.split("BUY:")[1]
+        try:
+            purchased = client.incoming_phone_numbers.create(phone_number=number)
+            await query.edit_message_text(f"✅ আপনি নাম্বারটি কিনেছেন: {purchased.phone_number}")
+        except Exception as e:
+            await query.edit_message_text(f"নাম্বার কেনা যায়নি: {e}")
+    elif data.startswith("DELETE:"):
+        phone_number = data.split("DELETE:")[1]
+        try:
+            numbers = client.incoming_phone_numbers.list(phone_number=phone_number)
+            if numbers:
+                numbers[0].delete()
+                await query.edit_message_text(f"✅ নাম্বার {phone_number} ডিলিট হয়েছে।")
+            else:
+                await query.edit_message_text("নাম্বার পাওয়া যায়নি।")
+        except Exception as e:
+            await query.edit_message_text(f"ডিলিট করতে সমস্যা: {e}")
 
-# Set up the Application
-application = Application.builder().token('8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA').build()
+def main():
+    keep_alive()
+    TOKEN = "8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
+    app = Application.builder().token(TOKEN).build()
 
-# Command handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("grant", grant))
-application.add_handler(CommandHandler("login", login))
-application.add_handler(CommandHandler("buy_number", buy_number))
-application.add_handler(CommandHandler("show_messages", show_messages))
-application.add_handler(CommandHandler("delete_number", delete_number))
-application.add_handler(CommandHandler("my_numbers", my_numbers))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("grant", grant))
+    app.add_handler(CommandHandler("login", login))
+    app.add_handler(CommandHandler("buy_number", buy_number))
+    app.add_handler(CommandHandler("show_messages", show_messages))
+    app.add_handler(CommandHandler("delete_number", delete_number))
+    app.add_handler(CommandHandler("my_numbers", my_numbers))
+    app.add_handler(CallbackQueryHandler(button_handler))
 
-# Button handlers
-application.add_handler(CallbackQueryHandler(subscription_handler))
-application.add_handler(CallbackQueryHandler(button_handler))
+    app.run_polling()
 
-# Keep the bot alive
-keep_alive()
-
-# Start the bot
-application.run_polling()
+if __name__ == "__main__":
+    main()
