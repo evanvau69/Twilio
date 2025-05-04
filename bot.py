@@ -48,6 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "SUPPORT : @EVANHELPING_BOT"
     )
 
+# Grant command
 async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
@@ -206,19 +207,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("PLAN:"):
         plan = data.split(":")[1]
+        user_id = query.from_user.id
         username = f"@{query.from_user.username}" if query.from_user.username else "N/A"
 
-        prices = {
-            "1h": (3600, "1 Hour", "$0"),
-            "1d": (86400, "1 Day", "$2"),
-            "7d": (604800, "7 Day", "$10"),
-            "15d": (1296000, "15 Day", "$15"),
-            "30d": (2592000, "30 Day", "$20")
-        }
+        prices = {"1h": (3600, "1 Hour", "$0"), "1d": (86400, "1 Day", "$2"), "7d": (604800, "7 Day", "$10"),
+                  "15d": (1296000, "15 Day", "$15"), "30d": (2592000, "30 Day", "$20")}
 
         if plan == "1h":
             if user_id in user_used_free_plan:
-                await query.edit_message_text("আপনি ইতিমধ্যেই ফ্রি প্লান ব্যবহার করেছেন। এটি আর প্রযোজ্য নয়।")
+                await query.edit_message_text("আপনি ইতিমধ্যেই ফ্রি প্লান ব্যবহার করেছেন এটি এখন আপনার জন্য প্রযোজ্য নয়।")
                 return
             user_used_free_plan.add(user_id)
             user_permissions[user_id] = time.time() + 3600
@@ -227,17 +224,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         seconds, label, cost = prices[plan]
         msg = (
-            f"*পেমেন্ট ডিটেইলস:*\n\n"
-            f"➤ দয়া করে *{cost}* পাঠান Binance Pay ID: `469628989`\n"
-            f"➤ পেমেন্ট করার পর প্রমাণ (screenshot/transaction ID) পাঠান: @EVANHELPING_BOT\n\n"
-            f"*আপনার তথ্য:*\n"
-            f"🆔 *User ID:* `{user_id}`\n"
-            f"👤 *Username:* `{username}`\n"
-            f"📋 *Plan:* {label}\n"
-            f"💰 *Amount:* {cost}"
+            f"**Please send {cost} to Binance Pay ID: 469628989**\n\n"
+            f"পেমেন্ট করার পর প্রুভ (screenshot/transaction ID) পাঠান: @EVANHELPING_BOT\n\n"
+            f"Your payment details:\n"
+            f"🆔 User ID: {user_id}\n"
+            f"👤 Username: {username}\n"
+            f"📋 Plan: {label}\n"
+            f"💰 Amount: {cost}"
         )
         await query.edit_message_text(msg, parse_mode="Markdown")
 
+# Broadcast command
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
