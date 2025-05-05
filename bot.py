@@ -24,7 +24,7 @@ def permission_required(func):
         expire_time = user_permissions.get(user_id, 0)
         if time.time() > expire_time:
             keyboard = [
-                [InlineKeyboardButton("1 Hour - $0.50", callback_data="PLAN:1h")],
+                [InlineKeyboardButton("1 Hour - $FREE", callback_data="PLAN:1h")],
                 [InlineKeyboardButton("1 Day - $2", callback_data="PLAN:1d")],
                 [InlineKeyboardButton("7 Day - $10", callback_data="PLAN:7d")],
                 [InlineKeyboardButton("15 Day - $15", callback_data="PLAN:15d")],
@@ -40,7 +40,7 @@ def permission_required(func):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "স্বাগতম Evan Bot-এ!\n\n"
+        "স্বাগতম Evan Bot-এ 🌸!\n\n"
         "/login <SID> <TOKEN>\n"
         "/buy_number <Area Code>\n"
         "/show_messages\n"
@@ -242,7 +242,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         plan = data.split(":")[1]
         username = f"@{query.from_user.username}" if query.from_user.username else "N/A"
         prices = {
-            "1h": (3600, "1 Hour", "$0.50"),
+            "1h": (3600, "1 Hour", "$FREE"),
             "1d": (86400, "1 Day", "$2"),
             "7d": (604800, "7 Day", "$10"),
             "15d": (1296000, "15 Day", "$15"),
