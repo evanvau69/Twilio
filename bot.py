@@ -3,9 +3,12 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from twilio.rest import Client
 from keep_alive import keep_alive
 import time
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 # Admin and permission system
-ADMIN_IDS = [6165060012,6699992290]
+ADMIN_IDS = [6165060012]
 user_permissions = {6165060012: float("inf")}
 user_used_free_plan = set()
 
@@ -14,7 +17,6 @@ user_clients = {}
 user_available_numbers = {}
 user_purchased_numbers = {}
 
-# Check permission decorator
 def permission_required(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -81,6 +83,7 @@ async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_clients[update.effective_user.id] = client
         await update.message.reply_text("✅ লগইন সফল!")
     except Exception as e:
+        logging.exception("Login error:")
         await update.message.reply_text(f"লগইন ব্যর্থ: {e}")
 
 @permission_required
@@ -106,6 +109,7 @@ async def buy_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
+        logging.exception("Buy number error:")
         await update.message.reply_text(f"সমস্যা: {e}")
 
 @permission_required
@@ -123,6 +127,7 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         output = "\n\n".join([f"From: {m.from_}\nTo: {m.to}\nBody: {m.body}" for m in incoming[:5]])
         await update.message.reply_text(output)
     except Exception as e:
+        logging.exception("Show messages error:")
         await update.message.reply_text(f"সমস্যা: {e}")
 
 @permission_required
@@ -139,6 +144,7 @@ async def delete_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         numbers[0].delete()
         await update.message.reply_text("✅ নাম্বার ডিলিট হয়েছে।")
     except Exception as e:
+        logging.exception("Delete number error:")
         await update.message.reply_text(f"ডিলিট করতে সমস্যা: {e}")
 
 @permission_required
@@ -155,6 +161,7 @@ async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton(n.phone_number, callback_data=f"DELETE:{n.phone_number}")] for n in numbers]
         await update.message.reply_text("আপনার নাম্বারগুলো:", reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
+        logging.exception("My numbers error:")
         await update.message.reply_text(f"সমস্যা: {e}")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -174,6 +181,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_purchased_numbers.setdefault(user_id, []).append(purchased.phone_number)
             await query.edit_message_text(f"✅ আপনি নাম্বারটি কিনেছেন: {purchased.phone_number}")
         except Exception as e:
+            logging.exception("Buy via button error:")
             await query.edit_message_text(f"নাম্বার কেনা যায়নি: {e}")
 
     elif data.startswith("DELETE:"):
@@ -187,6 +195,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await query.edit_message_text("নাম্বার পাওয়া যায়নি।")
         except Exception as e:
+            logging.exception("Delete via button error:")
             await query.edit_message_text(f"নাম্বার ডিলিট করতে সমস্যা: {e}")
 
     elif data == "CANCEL":
@@ -215,7 +224,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             seconds, label, cost = prices[plan]
             msg = (
                 f"Please send {cost} to Binance Pay ID: 469628989\n\n"
-                f"পেমেন্ট করার পর প্রুভ হিসাবে (screenshot/transaction ID) Admin কে পাড়াই দেন\n\n"
+                f"পেমেন্ট করার পর প্রুভ হিসাবে (screenshot/transaction ID) Admin কে পাঠিয়ে দিন\n\n"
                 f"Your payment details:\n"
                 f"🆔 User ID: {user_id}\n"
                 f"👤 Username: {username}\n"
@@ -224,6 +233,66 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Verification must be completed within 15 minutes, or the request will be cancelled."
             )
             await query.edit_message_text(msg)
+
+async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
+        return
+    if not context.args:
+        await update.message.reply_text("ব্যবহার: /add_admin <user_id>")
+        return
+    try:
+        new_admin_id = int(context.args[0])
+        if new_admin_id in ADMIN_IDS:
+            await update.message.reply_text("এই ইউজার ইতিমধ্যে Admin।")
+            return
+        ADMIN_IDS.append(new_admin_id)
+        user_permissions[new_admin_id] = float("inf")
+        await update.message.reply_text(f"✅ {new_admin_id} এখন Admin!")
+    except ValueError:
+        await update.message.reply_text("❌ সঠিকভাবে user_id দিন।")
+
+async def remove_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
+        return
+    if not context.args:
+        await update.message.reply_text("ব্যবহার: /remove_admin <user_id>")
+        return
+    try:
+        target_id = int(context.args[0])
+        if target_id == user_id:
+            await update.message.reply_text("❌ আপনি নিজেকে Admin থেকে সরাতে পারবেন না।")
+            return
+        if target_id not in ADMIN_IDS:
+            await update.message.reply_text("❌ এই ইউজার Admin না।")
+            return
+        if len(ADMIN_IDS) <= 1:
+            await update.message.reply_text("❌ কমপক্ষে ১ জন Admin থাকা আবশ্যক।")
+            return
+        ADMIN_IDS.remove(target_id)
+        user_permissions.pop(target_id, None)
+        await update.message.reply_text(f"✅ {target_id} কে Admin থেকে সরানো হয়েছে।")
+    except ValueError:
+        await update.message.reply_text("❌ সঠিকভাবে user_id দিন।")
+
+async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
+        return
+    text = "বর্তমান অ্যাডমিনদের তালিকা:\n\n"
+    for admin_id in ADMIN_IDS:
+        try:
+            user = await context.bot.get_chat(admin_id)
+            name = user.full_name
+            username = f"@{user.username}" if user.username else "N/A"
+        except:
+            name = "Unknown"
+            username = "N/A"
+        text += f"🆔 {admin_id} — {name} ({username})\n"
+    await update.message.reply_text(text)
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -256,6 +325,9 @@ def main():
     app.add_handler(CommandHandler("delete_number", delete_number))
     app.add_handler(CommandHandler("my_numbers", my_numbers))
     app.add_handler(CommandHandler("broadcast", broadcast))
+    app.add_handler(CommandHandler("add_admin", add_admin))
+    app.add_handler(CommandHandler("remove_admin", remove_admin))
+    app.add_handler(CommandHandler("list_admins", list_admins))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     app.run_polling()
