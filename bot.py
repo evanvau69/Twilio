@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from twilio.rest import Client
 from keep_alive import keep_alive
+from datetime import timedelta
 import time
 import logging
 
@@ -163,6 +164,42 @@ async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.exception("My numbers error:")
         await update.message.reply_text(f"সমস্যা: {e}")
+
+# NEW: List permitted users command
+async def permitted_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
+        return
+
+    if not user_permissions:
+        await update.message.reply_text("কোনো ইউজার এখনো পারমিশন নেয়নি।")
+        return
+
+    msg = "✅ List Of Permitted Users ✅\n\n"
+    now = time.time()
+    for uid, expire_time in user_permissions.items():
+        if expire_time == float("inf"):
+            duration = "Unlimited"
+        else:
+            remaining = max(0, expire_time - now)
+            duration = str(timedelta(seconds=int(remaining)))
+
+        try:
+            user = await context.bot.get_chat(uid)
+            name = user.full_name
+            username = f"@{user.username}" if user.username else "N/A"
+        except:
+            name = "Unknown"
+            username = "N/A"
+
+        msg += (
+            f"👤 User Name: {name}\n"
+            f"🆔 User ID: {uid}\n"
+            f"🔗 Username: {username}\n"
+            f"⏳ Duration Left: {duration}\n\n"
+        )
+
+    await update.message.reply_text(msg)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -328,6 +365,7 @@ def main():
     app.add_handler(CommandHandler("add_admin", add_admin))
     app.add_handler(CommandHandler("remove_admin", remove_admin))
     app.add_handler(CommandHandler("list_admins", list_admins))
+    app.add_handler(CommandHandler("permitted_users", permitted_users))  # <- New handler
     app.add_handler(CallbackQueryHandler(button_handler))
 
     app.run_polling()
