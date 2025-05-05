@@ -5,7 +5,7 @@ from keep_alive import keep_alive
 import time
 
 # Admin and permission system
-ADMIN_IDS = [6165060012]
+ADMIN_IDS = [6165060012,6699992290]
 user_permissions = {6165060012: float("inf")}
 user_used_free_plan = set()
 
