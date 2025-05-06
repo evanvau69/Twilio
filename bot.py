@@ -8,16 +8,17 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-# Admin and permission system
+# Admin system
 ADMIN_IDS = [6165060012]
 user_permissions = {6165060012: float("inf")}
 user_used_free_plan = set()
 
-# Twilio session data
+# Twilio session
 user_clients = {}
 user_available_numbers = {}
 user_purchased_numbers = {}
 
+# Permission check decorator
 def permission_required(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -49,6 +50,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "SUPPORT : @EVANHELPING_BOT"
     )
 
+# Admin permission grant
 async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
@@ -72,6 +74,37 @@ async def grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await update.message.reply_text("❌ ভুল ফরম্যাট। ব্যবহার করুন m, h, d, w, mo")
 
+# Active user list
+async def active_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
+        return
+    now = time.time()
+    active = {uid: exp for uid, exp in user_permissions.items() if exp > now or exp == float("inf")}
+    if not active:
+        await update.message.reply_text("কোনো Active Permission ইউজার নেই।")
+        return
+
+    msg = "✅ Active Permission ইউজার লিস্ট ✅\n\n"
+    for uid, exp in active.items():
+        try:
+            user = await context.bot.get_chat(uid)
+            name = user.full_name
+            username = f"@{user.username}" if user.username else "N/A"
+        except:
+            name = "Unknown"
+            username = "N/A"
+
+        duration = "Unlimited" if exp == float("inf") else str(timedelta(seconds=int(exp - now)))
+        msg += (
+            f"👤 Name: {name}\n"
+            f"🆔 ID: {uid}\n"
+            f"🔗 Username: {username}\n"
+            f"⏳ Time Left: {duration}\n\n"
+        )
+    await update.message.reply_text(msg)
+
+# Twilio login
 @permission_required
 async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 2:
@@ -87,6 +120,7 @@ async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.exception("Login error:")
         await update.message.reply_text(f"লগইন ব্যর্থ: {e}")
 
+# Buy number
 @permission_required
 async def buy_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -113,6 +147,7 @@ async def buy_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.exception("Buy number error:")
         await update.message.reply_text(f"সমস্যা: {e}")
 
+# Show messages
 @permission_required
 async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client = user_clients.get(update.effective_user.id)
@@ -131,6 +166,7 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.exception("Show messages error:")
         await update.message.reply_text(f"সমস্যা: {e}")
 
+# Delete number
 @permission_required
 async def delete_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client = user_clients.get(update.effective_user.id)
@@ -148,6 +184,7 @@ async def delete_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.exception("Delete number error:")
         await update.message.reply_text(f"ডিলিট করতে সমস্যা: {e}")
 
+# My numbers
 @permission_required
 async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     client = user_clients.get(update.effective_user.id)
@@ -165,42 +202,66 @@ async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.exception("My numbers error:")
         await update.message.reply_text(f"সমস্যা: {e}")
 
-# NEW: List permitted users command
-async def permitted_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Admin Management
+async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
         return
-
-    if not user_permissions:
-        await update.message.reply_text("কোনো ইউজার এখনো পারমিশন নেয়নি।")
-        return
-
-    msg = "✅ List Of Permitted Users ✅\n\n"
-    now = time.time()
-    for uid, expire_time in user_permissions.items():
-        if expire_time == float("inf"):
-            duration = "Unlimited"
+    try:
+        new_admin = int(context.args[0])
+        if new_admin not in ADMIN_IDS:
+            ADMIN_IDS.append(new_admin)
+            user_permissions[new_admin] = float("inf")
+            await update.message.reply_text(f"✅ {new_admin} এখন Admin!")
         else:
-            remaining = max(0, expire_time - now)
-            duration = str(timedelta(seconds=int(remaining)))
+            await update.message.reply_text("ইউজার ইতিমধ্যেই Admin।")
+    except:
+        await update.message.reply_text("❌ সঠিকভাবে user_id দিন।")
 
+async def remove_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS or len(ADMIN_IDS) <= 1:
+        await update.message.reply_text("❌ এই কমান্ড আপনার জন্য না।")
+        return
+    try:
+        target_id = int(context.args[0])
+        if target_id in ADMIN_IDS and target_id != user_id:
+            ADMIN_IDS.remove(target_id)
+            user_permissions.pop(target_id, None)
+            await update.message.reply_text(f"✅ {target_id} কে Admin থেকে সরানো হয়েছে।")
+        else:
+            await update.message.reply_text("❌ ভুল আইডি।")
+    except:
+        await update.message.reply_text("❌ সঠিকভাবে user_id দিন।")
+
+async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
+        return
+    msg = "🛡️ Admin List:\n\n"
+    for aid in ADMIN_IDS:
         try:
-            user = await context.bot.get_chat(uid)
-            name = user.full_name
-            username = f"@{user.username}" if user.username else "N/A"
+            user = await context.bot.get_chat(aid)
+            msg += f"{user.full_name} — @{user.username or 'N/A'} (ID: {aid})\n"
         except:
-            name = "Unknown"
-            username = "N/A"
-
-        msg += (
-            f"👤 User Name: {name}\n"
-            f"🆔 User ID: {uid}\n"
-            f"🔗 Username: {username}\n"
-            f"⏳ Duration Left: {duration}\n\n"
-        )
-
+            msg += f"Unknown (ID: {aid})\n"
     await update.message.reply_text(msg)
 
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
+        return
+    msg = " ".join(context.args)
+    success = fail = 0
+    for uid in user_permissions:
+        try:
+            await context.bot.send_message(chat_id=uid, text=msg)
+            success += 1
+        except:
+            fail += 1
+    await update.message.reply_text(f"✅ পাঠানো হয়েছে: {success}, ❌ ব্যর্থ: {fail}")
+
+# Button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -215,10 +276,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         try:
             purchased = client.incoming_phone_numbers.create(phone_number=number)
-            user_purchased_numbers.setdefault(user_id, []).append(purchased.phone_number)
             await query.edit_message_text(f"✅ আপনি নাম্বারটি কিনেছেন: {purchased.phone_number}")
         except Exception as e:
-            logging.exception("Buy via button error:")
             await query.edit_message_text(f"নাম্বার কেনা যায়নি: {e}")
 
     elif data.startswith("DELETE:"):
@@ -232,7 +291,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await query.edit_message_text("নাম্বার পাওয়া যায়নি।")
         except Exception as e:
-            logging.exception("Delete via button error:")
             await query.edit_message_text(f"নাম্বার ডিলিট করতে সমস্যা: {e}")
 
     elif data == "CANCEL":
@@ -256,99 +314,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_permissions[user_id] = time.time() + 3600
             await query.edit_message_text("✅ আপনি ১ ঘন্টার জন্য ফ্রি প্লান একটিভ করেছেন।")
             return
-
         if plan in prices:
-            seconds, label, cost = prices[plan]
+            _, label, cost = prices[plan]
             msg = (
-                f"Please send {cost} to Binance Pay ID: 469628989\n\n"
-                f"পেমেন্ট করার পর প্রুভ হিসাবে (screenshot/transaction ID) Admin কে পাঠিয়ে দিন\n\n"
-                f"Your payment details:\n"
-                f"🆔 User ID: {user_id}\n"
-                f"👤 Username: {username}\n"
-                f"📋 Plan: {label} - {cost}\n"
-                f"💰 Amount: {cost}\n\n"
-                f"Verification must be completed within 15 minutes, or the request will be cancelled."
+                f"Please send {cost} to Binance Pay ID: 469628989\n"
+                f"পেমেন্ট করার পর প্রুভ পাঠান Admin কে\n\n"
+                f"User ID: {user_id}\nUsername: {username}\nPlan: {label} - {cost}"
             )
             await query.edit_message_text(msg)
 
-async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
-        return
-    if not context.args:
-        await update.message.reply_text("ব্যবহার: /add_admin <user_id>")
-        return
-    try:
-        new_admin_id = int(context.args[0])
-        if new_admin_id in ADMIN_IDS:
-            await update.message.reply_text("এই ইউজার ইতিমধ্যে Admin।")
-            return
-        ADMIN_IDS.append(new_admin_id)
-        user_permissions[new_admin_id] = float("inf")
-        await update.message.reply_text(f"✅ {new_admin_id} এখন Admin!")
-    except ValueError:
-        await update.message.reply_text("❌ সঠিকভাবে user_id দিন।")
-
-async def remove_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
-        return
-    if not context.args:
-        await update.message.reply_text("ব্যবহার: /remove_admin <user_id>")
-        return
-    try:
-        target_id = int(context.args[0])
-        if target_id == user_id:
-            await update.message.reply_text("❌ আপনি নিজেকে Admin থেকে সরাতে পারবেন না।")
-            return
-        if target_id not in ADMIN_IDS:
-            await update.message.reply_text("❌ এই ইউজার Admin না।")
-            return
-        if len(ADMIN_IDS) <= 1:
-            await update.message.reply_text("❌ কমপক্ষে ১ জন Admin থাকা আবশ্যক।")
-            return
-        ADMIN_IDS.remove(target_id)
-        user_permissions.pop(target_id, None)
-        await update.message.reply_text(f"✅ {target_id} কে Admin থেকে সরানো হয়েছে।")
-    except ValueError:
-        await update.message.reply_text("❌ সঠিকভাবে user_id দিন।")
-
-async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS:
-        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
-        return
-    text = "বর্তমান অ্যাডমিনদের তালিকা:\n\n"
-    for admin_id in ADMIN_IDS:
-        try:
-            user = await context.bot.get_chat(admin_id)
-            name = user.full_name
-            username = f"@{user.username}" if user.username else "N/A"
-        except:
-            name = "Unknown"
-            username = "N/A"
-        text += f"🆔 {admin_id} — {name} ({username})\n"
-    await update.message.reply_text(text)
-
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ আপনি এই কমান্ড ব্যবহার করতে পারবেন না।")
-        return
-    if not context.args:
-        await update.message.reply_text("ব্যবহার: /broadcast <message>")
-        return
-    text = " ".join(context.args)
-    success = fail = 0
-    for uid in user_permissions:
-        try:
-            await context.bot.send_message(chat_id=uid, text=text)
-            success += 1
-        except:
-            fail += 1
-    await update.message.reply_text(f"✅ পাঠানো হয়েছে: {success} জনকে\n❌ ব্যর্থ হয়েছে: {fail} জনকে")
-
+# Start bot
 def main():
     keep_alive()
     TOKEN = "8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
@@ -356,16 +331,16 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("grant", grant))
+    app.add_handler(CommandHandler("active_users", active_users))
     app.add_handler(CommandHandler("login", login))
     app.add_handler(CommandHandler("buy_number", buy_number))
     app.add_handler(CommandHandler("show_messages", show_messages))
     app.add_handler(CommandHandler("delete_number", delete_number))
     app.add_handler(CommandHandler("my_numbers", my_numbers))
-    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("add_admin", add_admin))
     app.add_handler(CommandHandler("remove_admin", remove_admin))
     app.add_handler(CommandHandler("list_admins", list_admins))
-    app.add_handler(CommandHandler("permitted_users", permitted_users))  # <- New handler
+    app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     app.run_polling()
