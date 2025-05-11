@@ -25,7 +25,7 @@ def permission_required(func):
         expire_time = user_permissions.get(user_id, 0)
         if time.time() > expire_time:
             keyboard = [
-                [InlineKeyboardButton("1 Hour - $FREE", callback_data="PLAN:1h")],
+                [InlineKeyboardButton("30 Minute - $FREE", callback_data="PLAN:30m")],
                 [InlineKeyboardButton("1 Day - $2", callback_data="PLAN:1d")],
                 [InlineKeyboardButton("7 Day - $10", callback_data="PLAN:7d")],
                 [InlineKeyboardButton("15 Day - $15", callback_data="PLAN:15d")],
@@ -41,13 +41,13 @@ def permission_required(func):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "স্বাগতম Evan Bot-এ 🌸 কাজ করার জন্য নিচের কমান্ড গুলো ব্যবহার করতে পারেন!\n\n"
+        "স্বাগতম 🌸「* 𝙏𝘼𝙎𝙆 メ 𝙏𝙍𝙀𝘼𝙎𝙐𝙍𝙀 」-এ 🤍 কাজ করার জন্য নিচের কমান্ড গুলো ব্যবহার করতে পরবেন!\n\n"
         "/login <SID> <TOKEN>\n"
-        "/buy_number <Area Code>\n"
+        "/buy_number (Area Code)  \n"
         "/show_messages\n"
         "/delete_number\n"
         "/my_numbers\n"
-        "SUPPORT : @EVANHELPING_BOT"
+        " 🛂SUPPORT : @EVANHELPING_BOT"
     )
 
 # Admin permission grant
@@ -101,6 +101,7 @@ async def active_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🆔 ID: {uid}\n"
             f"🔗 Username: {username}\n"
             f"⏳ Time Left: {duration}\n\n"
+            f"_________________________\n"
         )
     await update.message.reply_text(msg)
 
@@ -115,37 +116,45 @@ async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
         client = Client(sid, token)
         client.api.accounts(sid).fetch()
         user_clients[update.effective_user.id] = client
-        await update.message.reply_text("✅ লগইন সফল!")
+        await update.message.reply_text("✅ লগইন সফল হয়েছে!")
     except Exception as e:
         logging.exception("Login error:")
-        await update.message.reply_text(f"লগইন ব্যর্থ: {e}")
+        await update.message.reply_text(f"লগইন হয়নি আপনার Token নষ্ট হয়েছে 🥲")
 
 # Buy number
 @permission_required
 async def buy_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("ব্যবহার: /buy_number <Area Code>")
-        return
     user_id = update.effective_user.id
     client = user_clients.get(user_id)
+
     if not client:
         await update.message.reply_text("⚠️ আগে /login করুন।")
         return
+
     try:
-        numbers = client.available_phone_numbers("CA").local.list(area_code=context.args[0], limit=10)
+        if context.args:
+            area_code = context.args[0]
+            numbers = client.available_phone_numbers("CA").local.list(area_code=area_code, limit=10)
+        else:
+            numbers = client.available_phone_numbers("CA").local.list(limit=10)
+
         if not numbers:
             await update.message.reply_text("নাম্বার পাওয়া যায়নি।")
             return
+
         user_available_numbers[user_id] = [n.phone_number for n in numbers]
         keyboard = [[InlineKeyboardButton(n.phone_number, callback_data=f"BUY:{n.phone_number}")] for n in numbers]
         keyboard.append([InlineKeyboardButton("Cancel ❌", callback_data="CANCEL")])
+
         await update.message.reply_text(
             "নিচের নাম্বারগুলো পাওয়া গেছে:\n\n" + "\n".join(user_available_numbers[user_id]),
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+
     except Exception as e:
         logging.exception("Buy number error:")
-        await update.message.reply_text(f"সমস্যা: {e}")
+        await update.message.reply_text(f"সমস্যা: দয়া করে আপনার আগের নাম্বার ডিলেট করুন অথবা Token চেঞ্জ করুন")
+
 
 # Show messages
 @permission_required
@@ -164,7 +173,7 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(output)
     except Exception as e:
         logging.exception("Show messages error:")
-        await update.message.reply_text(f"সমস্যা: {e}")
+        await update.message.reply_text(f"সমস্যা: আপনার Token এ সমস্যা দয়া করে Token চেঞ্জ করুন")
 
 # Delete number
 @permission_required
@@ -182,7 +191,7 @@ async def delete_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ নাম্বার ডিলিট হয়েছে।")
     except Exception as e:
         logging.exception("Delete number error:")
-        await update.message.reply_text(f"ডিলিট করতে সমস্যা: {e}")
+        await update.message.reply_text(f"ডিলিট হয়নি আপনার Token এ সমস্যা দয়া করে Token চেঞ্জ করুন ")
 
 # My numbers
 @permission_required
@@ -200,7 +209,7 @@ async def my_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("আপনার নাম্বারগুলো:", reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logging.exception("My numbers error:")
-        await update.message.reply_text(f"সমস্যা: {e}")
+        await update.message.reply_text(f"সমস্যা: আপনার Token এ সমস্যা দয়া করে Token চেঞ্জ করুন ")
 
 # Admin Management
 async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -276,9 +285,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         try:
             purchased = client.incoming_phone_numbers.create(phone_number=number)
-            await query.edit_message_text(f"✅ আপনি নাম্বারটি কিনেছেন: {purchased.phone_number}")
+            await query.edit_message_text(f"✅ আপনার নাম্বারটি কিনা হয়েছে: {purchased.phone_number}")
         except Exception as e:
-            await query.edit_message_text(f"নাম্বার কেনা যায়নি: {e}")
+            await query.edit_message_text(f"নাম্বার কেনা যায়নি দয়া করে আপনার আগের নাম্বার ডিলেট করুন অথবা আপনার Token এ সমস্যা দয়া করে Token চেঞ্জ করুন")
 
     elif data.startswith("DELETE:"):
         number = data.split("DELETE:")[1]
@@ -291,7 +300,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await query.edit_message_text("নাম্বার পাওয়া যায়নি।")
         except Exception as e:
-            await query.edit_message_text(f"নাম্বার ডিলিট করতে সমস্যা: {e}")
+            await query.edit_message_text(f"নাম্বার ডিলিট করা যায়নি আপনার Token এ সমস্যা দয়া করে Token চেঞ্জ করুন ")
 
     elif data == "CANCEL":
         await query.edit_message_text("নাম্বার নির্বাচন বাতিল করা হয়েছে।")
@@ -300,25 +309,25 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         plan = data.split(":")[1]
         username = f"@{query.from_user.username}" if query.from_user.username else "N/A"
         prices = {
-            "1h": (3600, "1 Hour", "$FREE"),
+            "30Minute": (1800, "30 Minute", "$FREE"),
             "1d": (86400, "1 Day", "$2"),
             "7d": (604800, "7 Day", "$10"),
             "15d": (1296000, "15 Day", "$15"),
             "30d": (2592000, "30 Day", "$20")
         }
-        if plan == "1h":
+        if plan == "30m":
             if user_id in user_used_free_plan:
-                await query.edit_message_text("আপনি ইতিমধ্যেই ফ্রি প্লান ব্যবহার করেছেন।")
+                await query.edit_message_text("আপনি ইতিমধ্যেই ফ্রি প্লান ব্যবহার করেছেন।দয়া করে অন্য Plan Choose করুন")
                 return
             user_used_free_plan.add(user_id)
-            user_permissions[user_id] = time.time() + 3600
-            await query.edit_message_text("✅ আপনি ১ ঘন্টার জন্য ফ্রি প্লান একটিভ করেছেন।")
+            user_permissions[user_id] = time.time() + 1800
+            await query.edit_message_text("✅ আপনি ৩০ মিনিটের জন্য ফ্রি প্লান একটিভ করেছেন। মনে রাখবেন এটি শুধু একবারের জন্যই প্রযোজ্য 🟢🔵 ")
             return
         if plan in prices:
             _, label, cost = prices[plan]
             msg = (
                 f"Please send {cost} to Binance Pay ID: 469628989\n"
-                f"পেমেন্ট করার পর প্রুভ পাঠান Admin কে\n\n"
+                f"পেমেন্ট করার পর প্রুভ পাঠান Admin কে @Mr_Evan3490 \n\n"
                 f"User ID: {user_id}\nUsername: {username}\nPlan: {label} - {cost}"
             )
             await query.edit_message_text(msg)
@@ -326,7 +335,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Start bot
 def main():
     keep_alive()
-    TOKEN = "8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
+    TOKEN ="8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA"
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
