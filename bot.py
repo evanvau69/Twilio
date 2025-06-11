@@ -116,7 +116,7 @@ async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
         client = Client(sid, token)
         client.api.accounts(sid).fetch()
         user_clients[update.effective_user.id] = client
-        await update.message.reply_text("✅ লগইন সফল হয়েছে!")
+        await update.message.reply_text("✅ লগইন সফল হয়েছে! এখন কমান্ড ব্যবহার করুন ")
     except Exception as e:
         logging.exception("Login error:")
         await update.message.reply_text(f"লগইন হয়নি আপনার Token নষ্ট হয়েছে 🥲")
