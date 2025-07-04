@@ -1,7 +1,7 @@
 import time
 from twilio.rest import Client
 from telegram import Bot, Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, ConversationHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ConversationHandler
 
 # Global variable to store Twilio SID and Auth Token
 TWILIO_SID = None
@@ -13,7 +13,7 @@ current_number = None
 messages = None
 
 # Telegram Bot Token
-TELEGRAM_TOKEN = '8018963341:AAFBirbNovfFyvlzf_EBDrBsv8qPW5IpIDA'
+TELEGRAM_TOKEN = 'your_telegram_bot_token'
 
 # Puerto Rico Area Codes (All possible area codes)
 area_codes = ['787', '939', '340']  # All Puerto Rico area codes
@@ -145,7 +145,7 @@ def main():
     login_handler = ConversationHandler(
         entry_points=[CommandHandler('login', login)],
         states={
-            "WAITING_FOR_CREDENTIALS": [MessageHandler(Filters.text & ~Filters.command, handle_credentials)],
+            "WAITING_FOR_CREDENTIALS": [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_credentials)],
         },
         fallbacks=[],
     )
@@ -157,8 +157,8 @@ def main():
     dispatcher.add_handler(CommandHandler('My_Number', my_number))
     
     # Callback Handlers for button presses
-    dispatcher.add_handler(MessageHandler(Filters.regex('^Delete$'), delete_number_button))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^Message$'), show_message_button))
+    dispatcher.add_handler(MessageHandler(filters.Regex('^Delete$'), delete_number_button))
+    dispatcher.add_handler(MessageHandler(filters.Regex('^Message$'), show_message_button))
     
     # Start the bot
     updater.start_polling()
