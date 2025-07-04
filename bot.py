@@ -1,7 +1,7 @@
 import time
 from twilio.rest import Client
 from telegram import Bot, Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ConversationHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ConversationHandler
 
 # Global variable to store Twilio SID and Auth Token
 TWILIO_SID = None
@@ -137,9 +137,8 @@ def handle_incoming_sms():
 
 # Main function to set up the bot
 def main():
-    # Initialize the Updater and Dispatcher
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
+    # Initialize the Application (new approach from v20.0)
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # ConversationHandler for login process
     login_handler = ConversationHandler(
@@ -151,23 +150,17 @@ def main():
     )
     
     # Command Handlers
-    dispatcher.add_handler(CommandHandler('start', start))
-    dispatcher.add_handler(login_handler)
-    dispatcher.add_handler(CommandHandler('buy', buy))
-    dispatcher.add_handler(CommandHandler('My_Number', my_number))
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(login_handler)
+    application.add_handler(CommandHandler('buy', buy))
+    application.add_handler(CommandHandler('My_Number', my_number))
     
     # Callback Handlers for button presses
-    dispatcher.add_handler(MessageHandler(filters.Regex('^Delete$'), delete_number_button))
-    dispatcher.add_handler(MessageHandler(filters.Regex('^Message$'), show_message_button))
+    application.add_handler(MessageHandler(filters.Regex('^Delete$'), delete_number_button))
+    application.add_handler(MessageHandler(filters.Regex('^Message$'), show_message_button))
     
     # Start the bot
-    updater.start_polling()
-    
-    # Handle incoming SMS (this would be part of a background process to check for messages)
-    handle_incoming_sms()
-    
-    # Idle until you stop the bot manually
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
